@@ -1,0 +1,61 @@
+#!/bin/sh
+
+#
+# Copyright (c) 2000-2001 Thiago Rondon <maluco@mileniumnet.com.br>
+# Script para Backup.
+#
+
+. /data/scripts/backup.conf
+# Fim das configuracoes. 
+
+# Removendo os arquivos do backup
+#rm -f /backup/*
+#mkdir -p /backup
+
+# Criando os arquivos no $backup
+for dir in $DIRS_BACKUP; do
+	file=`echo $INI_FILE.$dir.tar.gz | sed 's/\//./g; s/\.\././g'`
+	filerm=`echo $RM_FILE.$dir.tar.gz | sed 's/\//./g; s/\.\././g'`
+	rm -f $DIR_BKP/$filerm
+	tar cfzp $DIR_BKP/$file $dir 2>/dev/null 1>/dev/null
+done
+
+# FTP
+if echo $FTP | grep Y > /dev/null; then
+cd $DIR_BKP
+ftp -ni $FTP_HOST << EOF
+user $FTP_USER $FTP_PASS
+cd $FTP_DIR
+mput $INI_FILE*.tar.gz
+quit
+EOF
+fi
+
+# Gravando CD
+if echo $CDW | grep Y > /dev/null ; then
+	if echo $CDRW | grep Y > /dev/null ; then
+		echo "Apagando CD-RW"
+		sleep 3
+		cdrecord dev=0,0,0 blank=all -force
+		echo "CD apagado"
+		sleep 5
+	fi
+	mkdir -p /imagem
+	rm -f /imagem/milenium.iso
+	mkisofs -r -o /imagem/milenium.iso /backup
+	cdrecord -v speed=2 dev=0,0,0 -data /imagem/milenium.iso
+	
+	# Testando se foi gravado com sucesso
+	dd if=/dev/cdrom of=/dev/null bs=1024k
+
+	rm -f /imagem/milenium.iso
+fi	
+
+# Gravando na FITA
+if echo $FITA | grep Y > /dev/null; then
+	tar cvfz /dev/st0 $INI_FILE*.tar.gz
+
+	# Testando se foi gravado com sucesso.
+	dd if=/dev/st0 of=/dev/null bs=1024k
+	
+fi
